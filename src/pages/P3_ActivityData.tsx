@@ -1,8 +1,17 @@
 import { useState, useEffect } from 'react';
-import { FolderOpen, ChevronDown, ChevronRight, Trash2, CheckCircle } from 'lucide-react';
+import { FolderOpen, ChevronDown, ChevronRight, Trash2, CheckCircle, FileText, Folder, Loader2, Eye } from 'lucide-react';
 import { useAppContext, CATEGORY_LABELS, CATEGORY_COLORS, getGWP } from '../AppContext';
 import { calcEmission, sortCategories } from '../utils/calculations';
-import { pickFolder, getFolder, clearFolder, reopenFolder } from '../utils/fileManager';
+import { pickFolder, getFolder, clearFolder, openLinkedFolder } from '../utils/fileManager';
+import type { FileEntry } from '../utils/fileManager';
+
+/** 格式化檔案大小 */
+const formatSize = (bytes?: number): string => {
+    if (bytes === undefined || bytes === null) return '';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
 
 export const P3_ActivityData = () => {
     const { sources, setSources, gwpVersion, setGwpVersion } = useAppContext();
@@ -10,8 +19,14 @@ export const P3_ActivityData = () => {
     const [toast, setToast] = useState<string | null>(null);
     // 紀錄每個排放源已關聯的資料夾名稱 (sourceId → folderName)
     const [folderMap, setFolderMap] = useState<Record<string, string>>({});
-    const currentGWP = getGWP(gwpVersion);
+    // 紀錄每個排放源的資料夾檔案列表 (sourceId → FileEntry[])
+    const [fileListMap, setFileListMap] = useState<Record<string, FileEntry[]>>({});
+    // 正在載入檔案列表的 sourceId
+    const [loadingFolder, setLoadingFolder] = useState<string | null>(null);
+    // 展開檔案列表的 sourceId set
+    const [openFolders, setOpenFolders] = useState<Set<string>>(new Set());
 
+    const currentGWP = getGWP(gwpVersion);
     const enabled = sources.filter(s => s.enabled);
     const catKeys = sortCategories([...new Set(enabled.map(s => s.category))]);
 
@@ -40,21 +55,64 @@ export const P3_ActivityData = () => {
         const folderName = await pickFolder(sourceId);
         if (folderName) {
             setFolderMap(prev => ({ ...prev, [sourceId]: folderName }));
+            // 自動展開檔案列表
+            await handleOpenFolder(sourceId);
             showToast(`📁 已關聯資料夾「${folderName}」`);
         }
     };
 
-    /** 重新開啟資料夾（瀏覽器會提示使用者再選一次） */
-    const handleReopenFolder = async () => {
-        await reopenFolder();
+    /** 開啟資料夾 — 從 IndexedDB 取出 handle，列出檔案 */
+    const handleOpenFolder = async (sourceId: string) => {
+        // 如果已經展開，就收合
+        if (openFolders.has(sourceId) && fileListMap[sourceId]) {
+            setOpenFolders(prev => {
+                const next = new Set(prev);
+                next.delete(sourceId);
+                return next;
+            });
+            return;
+        }
+
+        setLoadingFolder(sourceId);
+        const entries = await openLinkedFolder(sourceId);
+        setLoadingFolder(null);
+
+        if (entries === null) {
+            // handle 不存在或權限被拒 — 提示重新選擇
+            showToast('⚠️ 需要重新選擇資料夾（權限已過期或 handle 遺失）');
+            const folderName = await pickFolder(sourceId);
+            if (folderName) {
+                setFolderMap(prev => ({ ...prev, [sourceId]: folderName }));
+                // 重新讀取
+                const retryEntries = await openLinkedFolder(sourceId);
+                if (retryEntries) {
+                    setFileListMap(prev => ({ ...prev, [sourceId]: retryEntries }));
+                    setOpenFolders(prev => new Set(prev).add(sourceId));
+                }
+            }
+            return;
+        }
+
+        setFileListMap(prev => ({ ...prev, [sourceId]: entries }));
+        setOpenFolders(prev => new Set(prev).add(sourceId));
     };
 
     /** 移除資料夾關聯 */
-    const handleClearFolder = (sourceId: string, folderName: string) => {
-        clearFolder(sourceId);
+    const handleClearFolder = async (sourceId: string, folderName: string) => {
+        await clearFolder(sourceId);
         setFolderMap(prev => {
             const next = { ...prev };
             delete next[sourceId];
+            return next;
+        });
+        setFileListMap(prev => {
+            const next = { ...prev };
+            delete next[sourceId];
+            return next;
+        });
+        setOpenFolders(prev => {
+            const next = new Set(prev);
+            next.delete(sourceId);
             return next;
         });
         showToast(`🗑 已移除「${folderName}」的關聯`);
@@ -105,6 +163,9 @@ export const P3_ActivityData = () => {
                             const emission = calcEmission(source);
                             const gasKeys = Object.keys(source.gases).filter(g => source.gases[g]);
                             const linkedFolder = folderMap[source.id] || null;
+                            const isFileListOpen = openFolders.has(source.id);
+                            const fileList = fileListMap[source.id] || [];
+                            const isLoading = loadingFolder === source.id;
 
                             return (
                                 <div key={source.id} className="accordion">
@@ -116,6 +177,7 @@ export const P3_ActivityData = () => {
                                             {source.totalAmount > 0 ? `${source.totalAmount.toLocaleString()} ${source.unit}` : '—'}
                                         </span>
                                         {emission > 0 && <span style={{ fontWeight: 700, color: '#059669', marginLeft: '0.5rem' }}>{emission.toFixed(4)} t</span>}
+                                        {linkedFolder && <span style={{ fontSize: '0.75rem', color: '#059669', marginLeft: '0.5rem' }} title={`佐證：${linkedFolder}`}>📁</span>}
                                     </div>
                                     {isOpen && (
                                         <div className="accordion-body">
@@ -189,40 +251,123 @@ export const P3_ActivityData = () => {
                                                     {emission > 0 ? emission.toFixed(4) : '—'}
                                                 </div>
                                             </div>
-                                            {/* Folder selection */}
-                                            <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                                                <button className="btn btn-secondary btn-sm" onClick={() => handlePickFolder(source.id)}>
-                                                    <FolderOpen size={14} /> {linkedFolder ? '重新選擇資料夾' : '選擇佐證資料夾'}
-                                                </button>
-                                            </div>
-                                            {linkedFolder && (
-                                                <div style={{
-                                                    marginTop: '0.5rem', padding: '0.6rem 0.9rem',
-                                                    background: 'rgba(5,150,105,0.06)', border: '1px solid rgba(5,150,105,0.15)',
-                                                    borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '0.5rem'
-                                                }}>
-                                                    <FolderOpen size={16} color="#059669" />
-                                                    <span
-                                                        onClick={() => handleReopenFolder()}
-                                                        style={{
-                                                            flex: 1, fontWeight: 600, color: '#059669',
-                                                            cursor: 'pointer', textDecoration: 'underline',
-                                                            textDecorationStyle: 'dotted', textUnderlineOffset: '3px'
-                                                        }}
-                                                        title="點擊可重新開啟此資料夾"
-                                                    >
-                                                        📂 {linkedFolder}
-                                                    </span>
-                                                    <button
-                                                        className="btn btn-sm"
-                                                        style={{ background: 'transparent', color: '#ef4444', border: 'none', padding: '0.2rem' }}
-                                                        onClick={() => handleClearFolder(source.id, linkedFolder)}
-                                                        title="移除資料夾關聯"
-                                                    >
-                                                        <Trash2 size={14} />
+
+                                            {/* ── 佐證資料夾區塊 ── */}
+                                            <div style={{ marginTop: '0.75rem' }}>
+                                                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                                                    <button className="btn btn-secondary btn-sm" onClick={() => handlePickFolder(source.id)}>
+                                                        <FolderOpen size={14} /> {linkedFolder ? '重新選擇資料夾' : '選擇佐證資料夾'}
                                                     </button>
                                                 </div>
-                                            )}
+
+                                                {/* 已關聯的資料夾 — 點擊直接展開檔案列表 */}
+                                                {linkedFolder && (
+                                                    <div style={{ marginTop: '0.5rem' }}>
+                                                        <div
+                                                            onClick={() => handleOpenFolder(source.id)}
+                                                            style={{
+                                                                padding: '0.6rem 0.9rem',
+                                                                background: isFileListOpen ? 'rgba(5,150,105,0.1)' : 'rgba(5,150,105,0.04)',
+                                                                border: `1px solid rgba(5,150,105,${isFileListOpen ? '0.3' : '0.15'})`,
+                                                                borderRadius: isFileListOpen ? '8px 8px 0 0' : '8px',
+                                                                display: 'flex', alignItems: 'center', gap: '0.5rem',
+                                                                cursor: 'pointer', transition: 'all 0.2s',
+                                                                userSelect: 'none'
+                                                            }}
+                                                        >
+                                                            {isLoading ? (
+                                                                <Loader2 size={16} color="#059669" style={{ animation: 'spin 1s linear infinite' }} />
+                                                            ) : isFileListOpen ? (
+                                                                <ChevronDown size={16} color="#059669" />
+                                                            ) : (
+                                                                <ChevronRight size={16} color="#059669" />
+                                                            )}
+                                                            <FolderOpen size={16} color="#059669" />
+                                                            <span style={{
+                                                                flex: 1, fontWeight: 600, color: '#059669',
+                                                                fontSize: '0.9rem'
+                                                            }}>
+                                                                {linkedFolder}
+                                                            </span>
+                                                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                                                {isLoading ? '讀取中…' : isFileListOpen ? '點擊收合' : '點擊查看檔案'}
+                                                            </span>
+                                                            <button
+                                                                className="btn btn-sm"
+                                                                style={{ background: 'transparent', color: '#ef4444', border: 'none', padding: '0.2rem' }}
+                                                                onClick={(e) => { e.stopPropagation(); handleClearFolder(source.id, linkedFolder); }}
+                                                                title="移除資料夾關聯"
+                                                            >
+                                                                <Trash2 size={14} />
+                                                            </button>
+                                                        </div>
+
+                                                        {/* 檔案列表 */}
+                                                        {isFileListOpen && (
+                                                            <div style={{
+                                                                border: '1px solid rgba(5,150,105,0.15)',
+                                                                borderTop: 'none',
+                                                                borderRadius: '0 0 8px 8px',
+                                                                background: 'var(--card)',
+                                                                maxHeight: '300px',
+                                                                overflowY: 'auto'
+                                                            }}>
+                                                                {fileList.length === 0 ? (
+                                                                    <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                                                                        📭 此資料夾為空
+                                                                    </div>
+                                                                ) : (
+                                                                    <>
+                                                                        <div style={{
+                                                                            padding: '0.4rem 0.9rem',
+                                                                            fontSize: '0.75rem', color: 'var(--text-muted)',
+                                                                            borderBottom: '1px solid var(--border)',
+                                                                            display: 'flex', justifyContent: 'space-between'
+                                                                        }}>
+                                                                            <span>共 {fileList.length} 個項目</span>
+                                                                            <span>
+                                                                                {fileList.filter(f => f.kind === 'file').length} 檔案
+                                                                                {fileList.filter(f => f.kind === 'directory').length > 0 &&
+                                                                                    `・${fileList.filter(f => f.kind === 'directory').length} 資料夾`
+                                                                                }
+                                                                            </span>
+                                                                        </div>
+                                                                        {fileList.map((entry, i) => (
+                                                                            <div key={i} style={{
+                                                                                display: 'flex', alignItems: 'center', gap: '0.5rem',
+                                                                                padding: '0.45rem 0.9rem',
+                                                                                borderBottom: i < fileList.length - 1 ? '1px solid rgba(0,0,0,0.04)' : 'none',
+                                                                                fontSize: '0.85rem',
+                                                                                transition: 'background 0.15s'
+                                                                            }}
+                                                                                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(5,150,105,0.04)')}
+                                                                                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                                                                            >
+                                                                                {entry.kind === 'directory' ? (
+                                                                                    <Folder size={14} color="#f59e0b" />
+                                                                                ) : (
+                                                                                    <FileText size={14} color="var(--text-muted)" />
+                                                                                )}
+                                                                                <span style={{
+                                                                                    flex: 1, color: 'var(--text)',
+                                                                                    fontWeight: entry.kind === 'directory' ? 600 : 400
+                                                                                }}>
+                                                                                    {entry.name}
+                                                                                </span>
+                                                                                {entry.kind === 'file' && entry.size !== undefined && (
+                                                                                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                                                                                        {formatSize(entry.size)}
+                                                                                    </span>
+                                                                                )}
+                                                                            </div>
+                                                                        ))}
+                                                                    </>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
                                     )}
                                 </div>
@@ -231,6 +376,14 @@ export const P3_ActivityData = () => {
                     </div>
                 );
             })}
+
+            {/* Spinner animation */}
+            <style>{`
+                @keyframes spin {
+                    from { transform: rotate(0deg); }
+                    to { transform: rotate(360deg); }
+                }
+            `}</style>
         </div>
     );
 };
