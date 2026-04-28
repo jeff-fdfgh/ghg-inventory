@@ -1,42 +1,86 @@
-import { useState } from 'react';
-import { Upload, ChevronDown, ChevronRight, FolderOpen, FileText } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { FolderOpen, ChevronDown, ChevronRight, Trash2, CheckCircle } from 'lucide-react';
 import { useAppContext, CATEGORY_LABELS, CATEGORY_COLORS, getGWP } from '../AppContext';
 import { calcEmission, sortCategories } from '../utils/calculations';
-import { uploadFile, listFiles, openFolder } from '../utils/fileManager';
+import { pickFolder, getFolder, clearFolder, reopenFolder } from '../utils/fileManager';
 
 export const P3_ActivityData = () => {
     const { sources, setSources, gwpVersion, setGwpVersion } = useAppContext();
     const [expandedId, setExpandedId] = useState<string | null>(null);
+    const [toast, setToast] = useState<string | null>(null);
+    // 紀錄每個排放源已關聯的資料夾名稱 (sourceId → folderName)
+    const [folderMap, setFolderMap] = useState<Record<string, string>>({});
     const currentGWP = getGWP(gwpVersion);
 
     const enabled = sources.filter(s => s.enabled);
     const catKeys = sortCategories([...new Set(enabled.map(s => s.category))]);
 
+    // 頁面載入時，從 localStorage 讀取所有已關聯的資料夾
+    useEffect(() => {
+        const map: Record<string, string> = {};
+        enabled.forEach(s => {
+            const folder = getFolder(s.id);
+            if (folder) map[s.id] = folder;
+        });
+        setFolderMap(map);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [sources]);
+
     const updateSource = (id: string, field: string, value: unknown) => {
         setSources(prev => prev.map(s => s.id === id ? { ...s, [field]: value } : s));
     };
 
-    const handleUpload = async (sourceId: string, facilityName: string) => {
-        const input = document.createElement('input');
-        input.type = 'file'; input.multiple = true;
-        input.onchange = async () => {
-            if (!input.files) return;
-            for (const file of Array.from(input.files)) {
-                await uploadFile(facilityName, file);
-            }
-            // §2.4.5: 上傳後立即從 API 取得最新清單，寫入 Context
-            const files = await listFiles(facilityName);
-            setSources(prev => prev.map(s => s.id === sourceId ? { ...s, evidenceFiles: files } : s));
-        };
-        input.click();
+    const showToast = (msg: string) => {
+        setToast(msg);
+        setTimeout(() => setToast(null), 3000);
+    };
+
+    /** 選擇本機資料夾並關聯到排放源 */
+    const handlePickFolder = async (sourceId: string) => {
+        const folderName = await pickFolder(sourceId);
+        if (folderName) {
+            setFolderMap(prev => ({ ...prev, [sourceId]: folderName }));
+            showToast(`📁 已關聯資料夾「${folderName}」`);
+        }
+    };
+
+    /** 重新開啟資料夾（瀏覽器會提示使用者再選一次） */
+    const handleReopenFolder = async () => {
+        await reopenFolder();
+    };
+
+    /** 移除資料夾關聯 */
+    const handleClearFolder = (sourceId: string, folderName: string) => {
+        clearFolder(sourceId);
+        setFolderMap(prev => {
+            const next = { ...prev };
+            delete next[sourceId];
+            return next;
+        });
+        showToast(`🗑 已移除「${folderName}」的關聯`);
     };
 
     return (
         <div>
+            {/* Toast */}
+            {toast && (
+                <div style={{
+                    position: 'fixed', top: '1.5rem', right: '1.5rem', zIndex: 9999,
+                    background: 'var(--card)', border: '1px solid var(--primary)',
+                    borderRadius: '10px', padding: '0.75rem 1.25rem',
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
+                    display: 'flex', alignItems: 'center', gap: '0.5rem',
+                    fontSize: '0.9rem', fontWeight: 600, color: 'var(--text)',
+                    animation: 'fadeIn 0.3s ease'
+                }}>
+                    <CheckCircle size={16} color="var(--primary)" /> {toast}
+                </div>
+            )}
+
             <div className="card">
                 <h2>表四：活動數據填報</h2>
                 <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                    填入各排放源全年度使用量及排放係數。上傳的佐證資料會永久保存於本機。
+                    填入各排放源全年度使用量及排放係數。可關聯本機資料夾作為佐證資料存放位置。
                 </p>
 
                 <div style={{ marginTop: '1rem', padding: '1rem', background: 'var(--surface)', borderRadius: '8px', border: '1px solid var(--border)', display: 'inline-flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -60,7 +104,7 @@ export const P3_ActivityData = () => {
                             const isOpen = expandedId === source.id;
                             const emission = calcEmission(source);
                             const gasKeys = Object.keys(source.gases).filter(g => source.gases[g]);
-                            const files = source.evidenceFiles || [];
+                            const linkedFolder = folderMap[source.id] || null;
 
                             return (
                                 <div key={source.id} className="accordion">
@@ -145,25 +189,38 @@ export const P3_ActivityData = () => {
                                                     {emission > 0 ? emission.toFixed(4) : '—'}
                                                 </div>
                                             </div>
-                                            {/* File upload */}
-                                            <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                                                <button className="btn btn-secondary btn-sm" onClick={() => handleUpload(source.id, source.equipmentName)}>
-                                                    <Upload size={14} /> 上傳佐證
+                                            {/* Folder selection */}
+                                            <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                                                <button className="btn btn-secondary btn-sm" onClick={() => handlePickFolder(source.id)}>
+                                                    <FolderOpen size={14} /> {linkedFolder ? '重新選擇資料夾' : '選擇佐證資料夾'}
                                                 </button>
-                                                {files.length > 0 && (
-                                                    <button className="btn btn-secondary btn-sm" onClick={() => openFolder(source.equipmentName)}>
-                                                        <FolderOpen size={14} /> 開啟資料夾
-                                                    </button>
-                                                )}
                                             </div>
-                                            {files.length > 0 && (
-                                                <div className="file-list">
-                                                    {files.map((f, i) => (
-                                                        <div key={i} className="file-item">
-                                                            <FileText size={14} />
-                                                            <span className="name" onClick={() => openFolder(source.equipmentName)}>{f}</span>
-                                                        </div>
-                                                    ))}
+                                            {linkedFolder && (
+                                                <div style={{
+                                                    marginTop: '0.5rem', padding: '0.6rem 0.9rem',
+                                                    background: 'rgba(5,150,105,0.06)', border: '1px solid rgba(5,150,105,0.15)',
+                                                    borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '0.5rem'
+                                                }}>
+                                                    <FolderOpen size={16} color="#059669" />
+                                                    <span
+                                                        onClick={() => handleReopenFolder()}
+                                                        style={{
+                                                            flex: 1, fontWeight: 600, color: '#059669',
+                                                            cursor: 'pointer', textDecoration: 'underline',
+                                                            textDecorationStyle: 'dotted', textUnderlineOffset: '3px'
+                                                        }}
+                                                        title="點擊可重新開啟此資料夾"
+                                                    >
+                                                        📂 {linkedFolder}
+                                                    </span>
+                                                    <button
+                                                        className="btn btn-sm"
+                                                        style={{ background: 'transparent', color: '#ef4444', border: 'none', padding: '0.2rem' }}
+                                                        onClick={() => handleClearFolder(source.id, linkedFolder)}
+                                                        title="移除資料夾關聯"
+                                                    >
+                                                        <Trash2 size={14} />
+                                                    </button>
                                                 </div>
                                             )}
                                         </div>
