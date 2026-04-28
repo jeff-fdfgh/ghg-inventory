@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { FolderOpen, ChevronDown, ChevronRight, Trash2, CheckCircle, FileText, Folder, Loader2, Eye } from 'lucide-react';
+import { FolderOpen, ChevronDown, ChevronRight, Trash2, CheckCircle, FileText, Folder, Loader2 } from 'lucide-react';
 import { useAppContext, CATEGORY_LABELS, CATEGORY_COLORS, getGWP } from '../AppContext';
 import { calcEmission, sortCategories } from '../utils/calculations';
 import { pickFolder, getFolder, clearFolder, openLinkedFolder } from '../utils/fileManager';
