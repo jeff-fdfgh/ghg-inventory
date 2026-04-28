@@ -1,0 +1,446 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+  /* Precision Ecology "Data Naturalist" Palette */
+  --bg: #fbf8ff;
+  --surface-low: #f4f2ff;
+  --card-bg: #ffffff;
+  /* surface-container-highest */
+
+  /* Outline Variant at 15% opacity for Ghost Borders */
+  --border: rgba(193, 200, 194, 0.15);
+
+  --text: #161a32;
+  --text-muted: #414844;
+  /* on-surface-variant */
+
+  --primary: #002d1c;
+  --primary-container: #00452e;
+  --primary-hover: #00452e;
+  --secondary: #116c4a;
+  --tertiary: #4cd6fb;
+  /* tertiary-fixed-dim */
+  --danger: #ba1a1a;
+
+  --radius: 0.75rem;
+  /* xl */
+  --radius-full: 9999px;
+
+  /* Deep ambient shadow: on-surface at very low opacity */
+  --shadow: 0 8px 32px rgba(22, 26, 50, 0.04);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: 'Manrope', sans-serif;
+  letter-spacing: -0.02em;
+}
+
+.app {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  min-height: 100vh;
+}
+
+.sidebar {
+  background: var(--bg);
+  padding: 2rem 1rem 2rem 1.5rem;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  border-right: none;
+  /* No explicit lines, relying on spacing */
+  z-index: 50;
+}
+
+.sidebar h2 {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--primary);
+  margin-bottom: 2rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  letter-spacing: -0.05em;
+}
+
+.sidebar button {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: none;
+  border-radius: 0 var(--radius-full) var(--radius-full) 0;
+  background: transparent;
+  color: var(--text);
+  font-family: 'Manrope', sans-serif;
+  font-weight: 600;
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  text-align: left;
+  margin-right: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.sidebar button:hover {
+  background: var(--surface-low);
+  transform: translateX(4px);
+}
+
+.sidebar button.active {
+  background: var(--primary);
+  color: white;
+  transform: none;
+}
+
+.main {
+  flex: 1;
+  padding: 2rem 3rem;
+  background: var(--bg);
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 3rem;
+  padding-bottom: 1.5rem;
+  position: sticky;
+  top: 0;
+  background: rgba(251, 248, 255, 0.8);
+  backdrop-filter: blur(20px);
+  z-index: 40;
+  border-bottom: none;
+  /* Tonal shift preferred, but header blends */
+}
+
+.header h1 {
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--primary);
+}
+
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  /* Ghost border */
+  border-radius: var(--radius);
+  padding: 2rem;
+  margin-bottom: 1.5rem;
+  box-shadow: var(--shadow);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Add a subtle technical accent to cards as described in DESIGN.md */
+.card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--primary-container);
+  opacity: 0.2;
+}
+
+.card h2 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+  color: var(--primary);
+}
+
+.card h3 {
+  font-size: 1rem;
+  margin-bottom: 0.75rem;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+
+.grid-3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 1.5rem;
+}
+
+.field {
+  margin-bottom: 1rem;
+}
+
+.field label {
+  display: block;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.5rem;
+}
+
+.field input,
+.field select,
+.field textarea {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 1px solid transparent;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  background: #e5e6ff;
+  /* surface-container-high approx */
+  color: var(--text);
+  transition: all 0.2s;
+  font-family: 'Inter', sans-serif;
+}
+
+.field input:focus,
+.field select:focus {
+  background: var(--card-bg);
+  border-color: rgba(44, 105, 78, 0.3);
+  /* surface-tint */
+  outline: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+}
+
+.btn {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 1.5rem;
+  /* xl */
+  font-family: 'Manrope', sans-serif;
+  font-weight: 700;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-container) 100%);
+  color: white;
+  box-shadow: 0 8px 16px rgba(0, 45, 28, 0.15);
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 20px rgba(0, 45, 28, 0.2);
+}
+
+.btn-secondary {
+  background: var(--surface-low);
+  color: var(--primary);
+  border: 1px solid var(--border);
+}
+
+.btn-secondary:hover {
+  background: #e5e6ff;
+  border-color: transparent;
+}
+
+.btn-danger {
+  background: var(--danger);
+  color: white;
+}
+
+.btn-sm {
+  padding: 0.5rem 1rem;
+  font-size: 0.8rem;
+  border-radius: 1rem;
+}
+
+.badge {
+  display: inline-flex;
+  padding: 0.25rem 0.75rem;
+  border-radius: var(--radius-full);
+  font-size: 0.8rem;
+  font-weight: 800;
+  font-family: 'Inter', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  background: var(--primary);
+  color: #ffffff;
+}
+
+/* Data Table Restyling (No 1px dividers per DESIGN.md) */
+table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 0.5rem;
+  /* 8px vertical spacing */
+  font-size: 0.875rem;
+}
+
+th {
+  text-align: left;
+  padding: 1rem;
+  color: var(--text-muted);
+  font-family: 'Inter', sans-serif;
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  border: none;
+}
+
+td {
+  padding: 1rem;
+  background: var(--surface-low);
+  border: none;
+}
+
+td:first-child {
+  border-top-left-radius: 0.5rem;
+  border-bottom-left-radius: 0.5rem;
+}
+
+td:last-child {
+  border-top-right-radius: 0.5rem;
+  border-bottom-right-radius: 0.5rem;
+}
+
+tr:hover td {
+  background: #e5e6ff;
+}
+
+.accordion {
+  background: var(--surface-low);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-bottom: 0.5rem;
+  border: 1px solid transparent;
+  /* Ready for ghost border */
+}
+
+.accordion-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1.25rem 1.5rem;
+  cursor: pointer;
+  background: transparent;
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--primary);
+  transition: all 0.2s;
+}
+
+.accordion-header:hover {
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.accordion-body {
+  padding: 1.5rem;
+  background: var(--card-bg);
+  border-top: 1px solid var(--border);
+}
+
+.stat-card {
+  background: var(--surface-low);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.stat-card .label {
+  font-size: 0.65rem;
+  font-family: 'Inter', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--text-muted);
+  font-weight: 800;
+  order: 1;
+}
+
+.stat-card .value {
+  font-size: 2.25rem;
+  font-family: 'Manrope', sans-serif;
+  font-weight: 800;
+  color: var(--primary);
+  order: 2;
+  margin-top: 0.5rem;
+}
+
+.file-list {
+  margin-top: 0.75rem;
+}
+
+.file-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.file-item .name {
+  color: var(--secondary);
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.file-item .name:hover {
+  color: var(--primary);
+}
+
+.toast {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-container) 100%);
+  color: white;
+  padding: 1rem 1.5rem;
+  border-radius: var(--radius);
+  font-weight: 600;
+  font-size: 0.875rem;
+  box-shadow: 0 12px 32px rgba(0, 45, 28, 0.25);
+  z-index: 999;
+  animation: slideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateY(100%) scale(0.95);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
